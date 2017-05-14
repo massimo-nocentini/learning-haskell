@@ -43,6 +43,9 @@ ten_nine = at_most 10 (Link 10 (\a -> Link 9 (\a -> Empty))) -- [10,9]
 ints :: Int -> Chain Int
 ints i = skipped 1 (i-1)
 
+chain_repeat :: Int -> Chain Int
+chain_repeat = skipped 0
+
 evens :: Chain Int
 evens = skipped 2 (-2)
 
@@ -51,6 +54,16 @@ odds = skipped 2 (-1)
 
 nats :: Chain Int
 nats = mplus evens odds
+
+fibs :: Chain Int
+fibs = f 0 1 where f n m = Link (m+n) (f m)
+
+chain_gcd :: Int -> Int -> Chain (Int, Int)
+chain_gcd m 0 = Link (0, m) (\_ -> Empty)
+chain_gcd m n = Link (div m n, mod m n) (\(a, b) -> chain_gcd n b)
+
+collatz :: Int -> Chain Int
+collatz n = if even n then Link (div n 2) collatz else Link (3*n+1) collatz
 
 boh :: Chain Int
 boh = bind nats ints
