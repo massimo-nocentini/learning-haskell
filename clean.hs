@@ -75,23 +75,15 @@ instance (Enum a, Enum b) => Enum (ClockwisePairEnum a b) where
         where cumulate = scanl (+) 0 [1,2..]
 
 
-
 catalan 0 = 1
-catalan n = sum [(catalan k) * catalan (n-1-k) | k <- [0..(n-1)]]
+catalan n = sum [catalan k * (catalan $ n-1-k) | k <- [0..n-1]]
 
---c n = [(catalan k) * catalan (n-1-k) | k <- [0..(n-1)]]
+g 0 = ([1], [1])
+g n = let v = sum $ zipWith (*) r s 
+      in (r ++ [v], v : s)
+      where (r, s) = g $ n-1
 
-catalan' 0 = 1
-catalan' n = sum r where r = c (n-1)
-
---c 0 = [catalan 0 * catalan 0] = [1]
---c n = [(catalan k) * catalan (n-1-k) | k <- [0..(n-1)]]
-c n | n < 0 = [] 
-    | n == 0 = [1]
-    | otherwise =   (catalan' (n-1) * catalan' 0 : ) . 
-                        --map (\(i,x) -> (div x (catalan' (n-i)))*catalan' (n+1-i)) . 
-                        map (\(i,x) -> (div x (catalan' (n-i)))*catalan' (n+1-i)) . 
-                            zip [2..] . c $ n-1
+catalan' = head . snd . g
 
 prodsum' n = n * x + (n + y) where (x, y) = p (n-1)
 
@@ -110,28 +102,6 @@ prod n = n * prod (n-1)
 sum' 0 = 0
 sum' m = m + sum' (m-1)
 
--- another attempt
-
---c' n = (cs, reverse cs) where cs = map catalan [0..n]
-
-catalan'' 0 = 1
---catalan'' 1 = 1
---catalan'' 2 = 2
---catalan'' n = sum . map (\(a,b) -> a*b) $ zip cs csr where (cs, csr) = c' (n-1)
-catalan'' n = c where (_, c:_) = c' n
-
---c' 0 = (cs, reverse cs) where cs = map catalan [0..0]
-c' 0 = ([1],[1])
---c' n = (cs, reverse cs) where cs = map catalan [0..n]
---  = let new = rewrite_catalan_with_factorial n in (cs ++ [new], new : csr) where (cs, csr) = map catalan [0..(n-1)] = c' (n-1)
---c' n =  let upper = prod (2*n) 
-            --bottom = prod n
-            --new = div upper (bottom * bottom * (n+1))     
-        --in (cs ++ [new], new : csr) where (cs, csr) = c' (n-1)
-
-c' n =  let new = sum . map (\(a,b) -> a*b) $ zip cs csr
-        in  (cs ++ [new], new : csr) 
-        where (cs, csr) = c' (n-1)
 
 quick_checks 0 = 0
 quick_checks n = n + 1 + (2 * div cs n)
