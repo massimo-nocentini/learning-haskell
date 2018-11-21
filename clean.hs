@@ -62,17 +62,16 @@ instance (Enum a, Enum b) => Enum (ClockwisePairEnum a b) where
             -- clockwise_recursive 0 a_index = div (a_index * (a_index + 1)) 2
             clockwise_recursive a_index b_index = a_index + clockwise 0 (a_index + b_index)
 
-            clockwise a_index b_index = 
-                let sum index = div (index * (index + 1)) 2
-                in a_index + sum (a_index + b_index)
+            clockwise a_index b_index = a_index + gauss (a_index + b_index)
+                where gauss n = div (n * (n + 1)) 2
     
     toEnum 0 = ClockwisePairEnum (toEnum 0, toEnum 0)
-    toEnum x =  let (ps, n:_) = break (\a -> x < a) cumulate 
-                    p = last ps
+    toEnum x =  let cumulate = scanl (+) 0 [1..]
+                    (ps, n:_) = break (x < ) cumulate 
+                    p:_ = reverse ps -- `p` is the last element of `ps`
                     a_index = x - p
                     b_index = n - x - 1
                 in  ClockwisePairEnum (toEnum a_index, toEnum b_index)
-        where cumulate = scanl (+) 0 [1,2..]
 
 
 catalan 0 = 1
@@ -101,7 +100,6 @@ prod n = n * prod (n-1)
 
 sum' 0 = 0
 sum' m = m + sum' (m-1)
-
 
 quick_checks 0 = 0
 quick_checks n = n + 1 + (2 * div cs n)
