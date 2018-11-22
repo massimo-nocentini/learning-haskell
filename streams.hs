@@ -152,3 +152,48 @@ fringe Leaf = []
 fringe (Node n Leaf Leaf) = [n]
 fringe (Node _ l r) = α ++ β
   where (α, β) = (fringe l, fringe r)
+
+data Treeˡ α = Leafˡ | Nodeˡ α (Treeˡ α) (Stream α)
+
+generateˡ :: (α -> α) -> (α -> α) -> α -> Stream (Treeˡ α)
+generateˡ l r x = S (\_ -> (Nodeˡ x a β, as))
+  where (S α) = generateˡ l r $ l x
+        β = generate r $ r x
+        (a, as) = α ()
+
+lattice :: Treeˡ (Integer, Integer)        
+lattice = let (S s) = generateˡ l r (0,0) in fst $ s ()
+  where l (x,y) = (x+1, y+1)
+        r (x,y) = (x, y+1)
+
+instance Functor Treeˡ where
+  fmap f Leafˡ = Leafˡ
+  fmap f (Nodeˡ v t s) = Nodeˡ (f v) α β
+    where (α, β) = (fmap f t, fmap f s)
+
+pruneˡ p Leafˡ = Leafˡ
+pruneˡ p (Nodeˡ n t s) = if p n then Leafˡ else (Nodeˡ n α β)
+  where α = pruneˡ p t
+        β = list_to_stream . fst . whileˢ (not . p) $ s
+
+treeˡ_to_treeᵇ Leafˡ = Leaf
+treeˡ_to_treeᵇ (Nodeˡ v t s) = Node v α (toᵇ s)
+  where α = treeˡ_to_treeᵇ t
+        toᵇ E = Leaf
+        toᵇ (S s) = Node β Leaf (toᵇ βs)
+          where (β, βs) = s ()
+
+sortˡ (Nodeˡ v t s) = S (\_ -> (v, α))
+  where α = sortˡ $ merge t s
+        merge t₀@(Nodeˡ n t₁ s₁) β@(S b₀) =
+          if n < b then Nodeˡ n γ β else Nodeˡ b t₀ bs
+          where (b, bs) = b₀ ()
+                γ = merge t₁ s₁
+
+repeatedˢ p (S s) = if p v w then S (\_ -> ((v, w), α)) else α
+  where (v, β@(S vs)) = s ()
+        (w, _) = vs ()
+        α = repeatedˢ p β
+                
+dijkstra_weizenbaum n = repeatedˢ (\v w -> fst v == fst w) . sortˡ . fmap h
+  where h p@(x,y) = (x^n + y^n, p)
