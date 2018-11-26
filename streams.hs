@@ -35,6 +35,15 @@ instance Functor Stream where
     where (v, vs) = s ()
           β = fmap f vs
 
+instance Applicative Stream where
+  pure v = S (\_ -> (v, E))
+  (<*>) E _ = E
+  (<*>) (S α) β = appendˢ γ $ fs <*> β
+    where
+      (f, fs) = α ()
+      γ = fmap f β
+
+
 nats :: Stream Integer
 nats = generate succ 0
 
@@ -59,9 +68,9 @@ zipˢ f (S s) (S r) = S (\_ -> (f v w, α))
   where ((v,vs), (w,ws)) = (s (), r ())
         α = zipˢ f vs ws
 
-whileˢ :: (α -> Bool) -> Stream α -> ([α], Stream α)
-whileˢ _ E = ([], E)
-whileˢ p s₀@(S s) = if p v then (v:α, β) else ([], s₀)
+whileˢ :: (α -> Bool) -> Stream α -> (Stream α, Stream α)
+whileˢ _ E = (E, E)
+whileˢ p s₀@(S s) = if p v then (consˢ v α, β) else (E, s₀)
   where (v, vs) = s ()
         (α, β) = whileˢ p vs
 
@@ -174,7 +183,7 @@ instance Functor Treeˡ where
 pruneˡ p Leafˡ = Leafˡ
 pruneˡ p (Nodeˡ n t s) = if p n then Leafˡ else (Nodeˡ n α β)
   where α = pruneˡ p t
-        β = list_to_stream . fst . whileˢ (not . p) $ s
+        β = fst . whileˢ (not . p) $ s
 
 treeˡ_to_treeᵇ Leafˡ = Leaf
 treeˡ_to_treeᵇ (Nodeˡ v t s) = Node v α (toᵇ s)
@@ -195,5 +204,64 @@ repeatedˢ p (S s) = if p v w then S (\_ -> ((v, w), α)) else α
         (w, _) = vs ()
         α = repeatedˢ p β
                 
-dijkstra_weizenbaum n = repeatedˢ (\v w -> fst v == fst w) . sortˡ . fmap h
+dijkstra_weizenbaum n = repeatedˢ r . sortˡ . fmap h
   where h p@(x,y) = (x^n + y^n, p)
+        r = \v w -> fst v == fst w
+
+combinations :: Integer -> Integer -> Stream (Stream Integer)
+combinations n m | m > n || m < 0 = E
+                 | n == 0 = uˢ E
+                 | otherwise = appendˢ α β
+  where 
+    α = fmap (consˢ 1) $ combinations (n-1) (m-1)
+    β = fmap (consˢ 0) $ combinations (n-1) m
+    
+permutations :: Integer -> Stream (Stream Integer)
+permutations 0 = uˢ E
+permutations n = insertˢ n $ permutations (n - 1)
+  where insertˢ n = concatˢ . fmap (put n)
+          where put n E = uˢ $ uˢ n
+                put n α@(S s) = let h = consˢ n α in consˢ h β
+                  where (v, vs) = s ()
+                        β = fmap (consˢ v) $ put n vs
+
+uptoˢ :: Integer -> Stream Integer
+uptoˢ n = fst . whileˢ (<= n) $ generate (+ 1) 0
+
+downfromˢ :: Integer -> Stream Integer
+downfromˢ n = fst . whileˢ (>= 0) $ generate (subtract 1) n
+
+genalt :: Integer -> (Stream (Stream Integer))
+genalt n = consˢ α $ consˢ β γ
+  where
+    α = uptoˢ n
+    β = downfromˢ n
+    γ = genalt n
+
+data Treeᶠ α = Leafᶠ | Nodeᶠ α (Stream (Treeᶠ α))
+
+-- permutations₁ n = let (S s) = t n 0 in fst $ s ()
+permutations₁ n =  t n 0 
+  where
+    t n x | n == x = generate id E
+          | otherwise = nextˢ (chunks $ x + 1) α
+      where
+        α = zipˢ Nodeᶠ β γ
+        β = concatˢ $ genalt x
+        γ = t n $ x + 1
+
+chunks :: Integer -> Stream α -> (Stream α, Stream α)
+chunks 0 η = (E, η)
+chunks n (S s) = (consˢ v κ, ε)
+  where
+    (v, vs) = s ()
+    (κ, ε) = chunks (n-1) vs
+
+prefix :: Stream (Stream (Treeᶠ Integer)) -> Stream Integer
+prefix (S s) = p $ s ()
+  where
+    p (E, _) = E
+    p ((S β), βs) = S (\_ -> (v, α))
+      where
+        (Nodeᶠ v γ, γs) = β ()
+        α = prefix . consˢ (appendˢ γ γs) $ βs
