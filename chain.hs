@@ -35,7 +35,7 @@ mplus (Link a α) b = Link a (\c -> mplus b (α a))
 
 bind :: Chain a -> (a -> Chain a) -> Chain a
 bind Empty g = Empty
-bind (Link a α) g = mplus (g a) (α a)
+bind (Link a α) g = mplus (g a) $ bind (α a) g
 
 ten_nine :: [Int]
 ten_nine = at_most 10 (Link 10 (\a -> Link 9 (\a -> Empty))) -- [10,9]
@@ -89,11 +89,21 @@ in matrix notation, associating index positions as objs appear in previous list:
 2₃, 2₇, 2₁₁, 2₁₅, 2₁₉, 2₂₃, 2₂₇
 -}
 
-boh' = fmap (list_to_chain . repeat) $ [0,1,2]
+doubles = bind nats (\i -> chain_repeat (i*2))
 
-dovetail :: Chain (Chain a) -> Chain a
-dovetail Empty = Empty
-dovetail (Link Empty f) = dovetail . f $ Empty
-dovetail (Link c@(Link a g) f) = Link a (\_ -> dovetail (fmap g tail))
-    where tail = dovetail (f c)
+boh' = fmap (list_to_chain . repeat) $ [0,1,2]
     
+θ :: [Chain a] -> ([a] -> [a]) -> ([Chain a] -> [Chain a]) -> ([a], [Chain a])
+θ [] as_col cs_col = (as_col [], cs_col [])
+θ (c:cs) as_col cs_col = case c of Empty -> θ cs as_col cs_col
+                                   Link a α -> θ cs (\as -> as_col (a:as)) (\cs -> cs_col((α a):cs))
+
+
+
+dovetail :: Chain (Chain a) -> [a]
+dovetail Empty = []
+dovetail link = d link [] []
+    where   d Empty as cs = case θ cs id id of
+                                ([], []) -> as
+                                (ass, css) -> d Empty (as ++ ass) css  
+            d (Link l κ) as cs = let (ass, css) = θ (l:cs) id id in d (κ l) (as ++ ass) css

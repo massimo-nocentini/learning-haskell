@@ -1,5 +1,4 @@
 
-
 module Streams where
 
 data Stream α = E | S (() -> (α, Stream α))
@@ -29,6 +28,14 @@ generate :: (α -> α) -> α -> Stream α
 generate f v = S (\_ -> (v, α))
   where α = generate f $ f v
 
+instance Monoid (Stream a) where
+  mempty = E
+  mappend E α = α
+  mappend (S s) α = S (\_ -> (v, β))
+    where
+      (v, vs) = s
+      β = mappend vs α
+
 instance Functor Stream where
   fmap f E = E
   fmap f (S s) = S (\_ -> (f v, β))
@@ -43,6 +50,14 @@ instance Applicative Stream where
       (f, fs) = α ()
       γ = fmap f β
 
+instance Monad Stream where
+ E >>= _ = E
+ (S s) >>= f = appendˢ α β
+  where
+   (s₀, s₊) = s ()
+   α = f s₀
+   β = s₊ >>= f
+    
 
 nats :: Stream Integer
 nats = generate succ 0
