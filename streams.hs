@@ -33,7 +33,7 @@ instance Monoid (Stream a) where
   mappend E α = α
   mappend (S s) α = S (\_ -> (v, β))
     where
-      (v, vs) = s
+      (v, vs) = s ()
       β = mappend vs α
 
 instance Functor Stream where
@@ -51,13 +51,13 @@ instance Applicative Stream where
       γ = fmap f β
 
 instance Monad Stream where
- E >>= _ = E
- (S s) >>= f = appendˢ α β
-  where
-   (s₀, s₊) = s ()
-   α = f s₀
-   β = s₊ >>= f
-    
+  E >>= _ = E
+  (S s) >>= f = appendˢ α β
+    where
+      (s₀, γ) = s ()
+      α = f s₀
+      β = γ >>= f
+
 
 nats :: Stream Integer
 nats = generate succ 0
@@ -247,32 +247,34 @@ downfromˢ :: Integer -> Stream Integer
 downfromˢ n = fst . whileˢ (>= 0) $ generate (subtract 1) n
 
 genalt :: Integer -> (Stream (Stream Integer))
-genalt n = consˢ α $ consˢ β γ
+genalt n = let α = uptoˢ n
+               β = downfromˢ n
+           in consˢ α $ consˢ β γ
   where
-    α = uptoˢ n
-    β = downfromˢ n
     γ = genalt n
-
+    
 data Treeᶠ α = Leafᶠ | Nodeᶠ α (Stream (Treeᶠ α))
 
--- permutations₁ n = let (S s) = t n 0 in fst $ s ()
-permutations₁ n =  t n 0 
+signature_tree
+  :: (Integer -> Stream (Stream α))
+     -> Integer -> Stream (Stream (Treeᶠ α))
+signature_tree gen n =  t n 0 
   where
     t n x | n == x = generate id E
-          | otherwise = nextˢ (chunks $ x + 1) α
+          | otherwise = nextˢ (chunkˢ $ x + 1) α
       where
         α = zipˢ Nodeᶠ β γ
-        β = concatˢ $ genalt x
+        β = concatˢ $ gen x
         γ = t n $ x + 1
 
-chunks :: Integer -> Stream α -> (Stream α, Stream α)
-chunks 0 η = (E, η)
-chunks n (S s) = (consˢ v κ, ε)
+chunkˢ :: Integer -> Stream α -> (Stream α, Stream α)
+chunkˢ 0 η = (E, η)
+chunkˢ n (S s) = (consˢ v κ, ε)
   where
     (v, vs) = s ()
-    (κ, ε) = chunks (n-1) vs
+    (κ, ε) = chunkˢ (n-1) vs
 
-prefix :: Stream (Stream (Treeᶠ Integer)) -> Stream Integer
+prefix :: Stream (Stream (Treeᶠ α)) -> Stream α
 prefix (S s) = p $ s ()
   where
     p (E, _) = E
@@ -280,3 +282,34 @@ prefix (S s) = p $ s ()
       where
         (Nodeᶠ v γ, γs) = β ()
         α = prefix . consˢ (appendˢ γ γs) $ βs
+
+remove_0s :: Stream Integer -> Stream Integer
+remove_0s = filterˢ non_zero
+  where
+    non_zero 0 = False
+    non_zero n = True
+
+swapˢ _ E = E
+swapˢ 1 (S s) = consˢ b (consˢ a α)
+  where
+    (a, (S r)) = s ()
+    (b, α) = r ()
+swapˢ n (S s) = consˢ a $ swapˢ (n-1) as
+  where
+    (a, as) = s ()
+
+
+permutations₁ :: Integer -> Stream (Stream Integer)
+permutations₁ n = let p₀ = list_to_stream [1..n]
+                  in consˢ p₀ $ permutations₂ swaps p₀ 
+  where
+    swaps = remove_0s . prefix $ signature_tree genalt n
+    
+    permutations₂ :: Stream Integer -> Stream Integer -> Stream (Stream Integer)
+    permutations₂ E p = consˢ p E
+    permutations₂ (S ι) p₀ = consˢ p₁ β
+      where
+        (i, γ) = ι ()
+        p₁ = swapˢ (n-i) p₀
+        β = permutations₂ γ p₁
+  
